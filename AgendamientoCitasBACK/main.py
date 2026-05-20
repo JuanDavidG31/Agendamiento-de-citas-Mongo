@@ -58,7 +58,7 @@ class MedicoBase(BaseModel):
     id_especialidad: int
 
 class MedicoCreate(MedicoBase):
-    pass
+    password: str  # <--- Pedimos la contraseña al crear el médico
 
 class MedicoResponse(MedicoBase):
     id_medico: int
@@ -223,6 +223,25 @@ def home():
 # ==========================================
 
 # --- CRUD DE PACIENTES ---
+@app.get("/pacientes/{id_paciente}", response_model=PacienteResponse, tags=["Pacientes"])
+def obtener_paciente(id_paciente: int):
+    conn = get_postgres_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id_paciente, documento, nombres, apellidos, email FROM PACIENTES WHERE id_paciente = %s;", (id_paciente,))
+    fila = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    
+    if not fila:
+        raise HTTPException(status_code=404, detail="Paciente no encontrado")
+        
+    return {
+        "id_paciente": fila[0], 
+        "documento": fila[1], 
+        "nombres": fila[2], 
+        "apellidos": fila[3], 
+        "email": fila[4]
+    }
 @app.post("/pacientes", response_model=PacienteResponse, status_code=status.HTTP_201_CREATED, tags=["Pacientes"])
 def crear_paciente(paciente: PacienteCreate):
     conn = get_postgres_connection()
@@ -304,6 +323,24 @@ def eliminar_paciente(id_paciente: int):
 
 
 # --- CRUD DE MÉDICOS ---
+@app.get("/medicos/{id_medico}", response_model=MedicoResponse, tags=["Médicos"])
+def obtener_medico(id_medico: int):
+    conn = get_postgres_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id_medico, documento, nombre_completo, id_especialidad FROM MEDICOS WHERE id_medico = %s;", (id_medico,))
+    fila = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    
+    if not fila:
+        raise HTTPException(status_code=404, detail="Médico no encontrado")
+        
+    return {
+        "id_medico": fila[0], 
+        "documento": fila[1], 
+        "nombre_completo": fila[2], 
+        "id_especialidad": fila[3]
+    }
 @app.post("/medicos", response_model=MedicoResponse, status_code=status.HTTP_201_CREATED, tags=["Médicos"])
 def crear_medico(medico: MedicoCreate):
     conn = get_postgres_connection()
@@ -311,15 +348,28 @@ def crear_medico(medico: MedicoCreate):
         raise HTTPException(status_code=500, detail="Error de base de datos")
     try:
         cursor = conn.cursor()
+        
+        # 1. Encriptamos la contraseña del médico
+        hash_pass = get_password_hash(medico.password)
+        
+        # 2. Insertamos en la tabla incluyendo el password_hash
         cursor.execute(
-            "INSERT INTO MEDICOS (documento, nombre_completo, id_especialidad) VALUES (%s, %s, %s) RETURNING id_medico;",
-            (medico.documento, medico.nombre_completo, medico.id_especialidad)
+            """INSERT INTO MEDICOS (documento, nombre_completo, id_especialidad, password_hash) 
+               VALUES (%s, %s, %s, %s) RETURNING id_medico;""",
+            (medico.documento, medico.nombre_completo, medico.id_especialidad, hash_pass)
         )
         id_generado = cursor.fetchone()[0]
         conn.commit()
         cursor.close()
         conn.close()
-        return {**medico.model_dump(), "id_medico": id_generado}
+        
+        # Retornamos los datos sin exponer la contraseña
+        return {
+            "id_medico": id_generado,
+            "documento": medico.documento,
+            "nombre_completo": medico.nombre_completo,
+            "id_especialidad": medico.id_especialidad
+        }
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=400, detail=f"No se pudo registrar el médico: {str(e)}")
@@ -364,6 +414,26 @@ def actualizar_medico(id_medico: int, medico: MedicoCreate):
 
 
 # --- CRUD DE CITAS ---
+@app.get("/citas/{id_cita}", response_model=CitaResponse, tags=["Agendamiento Citas"])
+def obtener_cita(id_cita: int):
+    conn = get_postgres_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id_cita, id_paciente, id_medico, id_estado, fecha_hora, consultorio FROM CITAS WHERE id_cita = %s;", (id_cita,))
+    fila = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    
+    if not fila:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+        
+    return {
+        "id_cita": fila[0], 
+        "id_paciente": fila[1], 
+        "id_medico": fila[2],
+        "id_estado": fila[3], 
+        "fecha_hora": fila[4], 
+        "consultorio": fila[5]
+    }
 @app.post("/citas", response_model=CitaResponse, status_code=status.HTTP_201_CREATED, tags=["Agendamiento Citas"])
 def agendar_cita(cita: CitaCreate):
     conn = get_postgres_connection()
@@ -441,6 +511,26 @@ def cambiar_estado_cita(id_cita: int, nuevo_id_estado: int):
 # ==========================================
 #          CRUD DE PAGOS
 # ==========================================
+
+@app.get("/pagos/{id_pago}", response_model=PagoResponse, tags=["Control de Pagos"])
+def obtener_pago(id_pago: int):
+    conn = get_postgres_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id_pago, id_cita, monto, fecha_pago, estado_pago FROM PAGOS WHERE id_pago = %s;", (id_pago,))
+    fila = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    
+    if not fila:
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+        
+    return {
+        "id_pago": fila[0], 
+        "id_cita": fila[1], 
+        "monto": float(fila[2]), 
+        "fecha_pago": fila[3], 
+        "estado_pago": fila[4]
+    }
 
 @app.post("/pagos", response_model=PagoResponse, status_code=status.HTTP_201_CREATED, tags=["Control de Pagos"])
 def registrar_pago(pago: PagoCreate):
@@ -552,7 +642,23 @@ def actualizar_pago_completo(id_pago: int, pago: PagoCreate):
 # ==========================================
 #          CRUD DE ESPECIALIDADES
 # ==========================================
-
+@app.get("/especialidades/{id_especialidad}", response_model=EspecialidadResponse, tags=["Catálogo de Especialidades"])
+def obtener_especialidad(id_especialidad: int):
+    conn = get_postgres_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id_especialidad, nombre_specialidad, tarifa_base FROM ESPECIALIDADES WHERE id_especialidad = %s;", (id_especialidad,))
+    fila = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    
+    if not fila:
+        raise HTTPException(status_code=404, detail="Especialidad no encontrada")
+        
+    return {
+        "id_especialidad": fila[0],
+        "nombre_specialidad": fila[1],
+        "tarifa_base": float(fila[2])
+    }
 @app.post("/especialidades", response_model=EspecialidadResponse, status_code=status.HTTP_201_CREATED, tags=["Catálogo de Especialidades"])
 def crear_especialidad(especialidad: EspecialidadCreate):
     conn = get_postgres_connection()
@@ -650,7 +756,22 @@ def eliminar_especialidad(id_especialidad: int):
 # ==========================================
 #          CRUD DE ESTADOS DE CITAS
 # ==========================================
-
+@app.get("/estados-cita/{id_estado}", response_model=EstadoCitaResponse, tags=["Catálogo de Estados"])
+def obtener_estado(id_estado: int):
+    conn = get_postgres_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id_estado, nombre_estado FROM ESTADOS_CITA WHERE id_estado = %s;", (id_estado,))
+    fila = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    
+    if not fila:
+        raise HTTPException(status_code=404, detail="Estado no encontrado")
+        
+    return {
+        "id_estado": fila[0],
+        "nombre_estado": fila[1]
+    }
 @app.post("/estados-cita", response_model=EstadoCitaResponse, status_code=status.HTTP_201_CREATED, tags=["Catálogo de Estados"])
 def crear_estado(estado: EstadoCitaCreate):
     conn = get_postgres_connection()
@@ -740,7 +861,25 @@ def eliminar_estado(id_estado: int):
 # ==========================================
 #          CRUD DE AUDITORÍA DE ESTADOS
 # ==========================================
-
+@app.get("/auditoria-estado/{id_auditoria}", response_model=AuditoriaEstadoResponse, tags=["Auditoría de Estados"])
+def obtener_auditoria(id_auditoria: int):
+    conn = get_postgres_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id_auditoria, id_cita, estado_anterior, estado_nuevo, fecha_cambio FROM auditoria_estados WHERE id_auditoria = %s;", (id_auditoria,))
+    fila = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    
+    if not fila:
+        raise HTTPException(status_code=404, detail="Registro de auditoría no encontrado")
+        
+    return {
+        "id_auditoria": fila[0],
+        "id_cita": fila[1],
+        "estado_anterior": fila[2],
+        "estado_nuevo": fila[3],
+        "fecha_cambio": fila[4]
+    }
 @app.post("/auditoria-estado", response_model=AuditoriaEstadoResponse, status_code=status.HTTP_201_CREATED, tags=["Auditoría de Estados"])
 def crear_auditoria(auditoria: AuditoriaEstadoCreate):
     conn = get_postgres_connection()
