@@ -12,6 +12,8 @@ import { AgendamientoCitasComponent } from './agendamiento-citas/agendamiento-ci
 import { Pacientes } from './pacientes/pacientes';
 import { Footer } from './core/footer/footer';
 import { Header } from './core/header/header';
+import { Login } from './login/login';
+import { Register } from './register/register';
 
 @NgModule({
   declarations: [
@@ -22,6 +24,8 @@ import { Header } from './core/header/header';
     Pacientes,
     Footer,
     Header,
+    Login,
+    Register,
   ],
   imports: [BrowserModule, AppRoutingModule, ReactiveFormsModule, FormsModule, CommonModule],
   providers: [provideBrowserGlobalErrorListeners()],
