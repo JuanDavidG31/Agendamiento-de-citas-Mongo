@@ -6,23 +6,50 @@ from typing import Optional, List
 # Importamos tu conexión a Neon desde database.py
 from database import get_postgres_connection
 
+from passlib.context import CryptContext
+import jwt
+import os
+
+# ==========================================
+# CONFIGURACIÓN DE SEGURIDAD (JWT y Bcrypt)
+# ==========================================
+SECRET_KEY = os.getenv("SECRET_KEY", "clave_secreta_hospital_el_bosque")
+ALGORITHM = "HS256"
+
+# Configuramos bcrypt para encriptar contraseñas
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def get_password_hash(password: str):
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str):
+    return pwd_context.verify(plain_password, hashed_password)
+
 # ==========================================
 # 1. ESQUEMAS DE VALIDACIÓN (PYDANTIC)
 # (Esto fue lo primero que te di. Define cómo se ven los datos)
 # ==========================================
-
+# --- ESQUEMA PARA LOGIN UNIFICADO ---
+class LoginRequest(BaseModel):
+    identificador: str  # Puede ser el email (paciente) o el documento (paciente/médico)
+    password: str
 # --- ESQUEMAS PARA PACIENTES ---
 class PacienteBase(BaseModel):
     documento: str
     nombres: str
     apellidos: str
-    email: Optional[str] = None  # Reemplazamos telefono por email
+    email: str  # Lo cambiamos a obligatorio (sin Optional) según tu base de datos
 
 class PacienteCreate(PacienteBase):
-    pass
+    password: str  # <--- Pedimos la contraseña solo al registrarse
 
 class PacienteResponse(PacienteBase):
     id_paciente: int
+
+# --- ESQUEMA PARA LOGIN DE PACIENTES ---
+class LoginPacienteRequest(BaseModel):
+    email: str
+    password: str
 
 # --- ESQUEMAS PARA MÉDICOS ---
 class MedicoBase(BaseModel):
@@ -65,7 +92,7 @@ class PagoResponse(PagoBase):
     
 # --- ESQUEMAS PARA ESPECIALIDADES ---
 class EspecialidadBase(BaseModel):
-    nombre_especialidad: str
+    nombre_specialidad: str  # <--- Sin la 'e'
     tarifa_base: float
 
 class EspecialidadCreate(EspecialidadBase):
@@ -105,6 +132,87 @@ app = FastAPI(
     version="2.0"
 )
 
+# ==========================================
+#          SISTEMA DE AUTENTICACIÓN
+# ==========================================
+
+@app.post("/auth/login", tags=["Autenticación"])
+def iniciar_sesion(credenciales: LoginRequest):
+    conn = get_postgres_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Error de base de datos")
+    
+    try:
+        cursor = conn.cursor()
+        
+        # 1. Intentar validar como PACIENTE (por email O por documento)
+        cursor.execute(
+            """SELECT id_paciente, password_hash, nombres, apellidos 
+               FROM PACIENTES 
+               WHERE email = %s OR documento = %s;""", 
+            (credenciales.identificador, credenciales.identificador)
+        )
+        paciente = cursor.fetchone()
+        
+        if paciente:
+            if not verify_password(credenciales.password, paciente[1]):
+                raise HTTPException(status_code=401, detail="Contraseña incorrecta")
+                
+            # Generar Token JWT para el paciente
+            token = jwt.encode(
+                {
+                    "sub": str(paciente[0]), 
+                    "rol": "paciente", 
+                    "nombre_completo": f"{paciente[2]} {paciente[3]}"
+                }, 
+                SECRET_KEY, 
+                algorithm=ALGORITHM
+            )
+            return {
+                "access_token": token, 
+                "token_type": "bearer", 
+                "rol": "paciente", 
+                "mensaje": f"Bienvenido, paciente {paciente[2]}"
+            }
+        
+        # 2. Intentar validar como MÉDICO (por documento)
+        cursor.execute(
+            """SELECT id_medico, password_hash, nombre_completo 
+               FROM MEDICOS 
+               WHERE documento = %s;""", 
+            (credenciales.identificador,)
+        )
+        medico = cursor.fetchone()
+        
+        if medico:
+            if not verify_password(credenciales.password, medico[1]):
+                raise HTTPException(status_code=401, detail="Contraseña incorrecta")
+                
+            # Generar Token JWT para el médico
+            token = jwt.encode(
+                {
+                    "sub": str(medico[0]), 
+                    "rol": "medico", 
+                    "nombre_completo": medico[2]
+                }, 
+                SECRET_KEY, 
+                algorithm=ALGORITHM
+            )
+            return {
+                "access_token": token, 
+                "token_type": "bearer", 
+                "rol": "medico", 
+                "mensaje": f"Bienvenido, Dr/Dra. {medico[2]}"
+            }
+            
+        # 3. Si el identificador no existe en ninguna de las dos tablas
+        raise HTTPException(status_code=404, detail="Usuario no encontrado en el sistema")
+        
+    finally:
+        if conn:
+            cursor.close()
+            conn.close()
+
 @app.get("/", tags=["Inicio"])
 def home():
     return {"mensaje": "API conectada a Neon lista."}
@@ -122,15 +230,29 @@ def crear_paciente(paciente: PacienteCreate):
         raise HTTPException(status_code=500, detail="Error de base de datos")
     try:
         cursor = conn.cursor()
+        
+        # 1. Encriptamos la contraseña antes de guardarla
+        hash_pass = get_password_hash(paciente.password)
+        
+        # 2. Insertamos incluyendo el password_hash
         cursor.execute(
-            "INSERT INTO PACIENTES (documento, nombres, apellidos, email) VALUES (%s, %s, %s, %s) RETURNING id_paciente;",
-            (paciente.documento, paciente.nombres, paciente.apellidos, paciente.email)
+            """INSERT INTO PACIENTES (documento, nombres, apellidos, email, password_hash) 
+               VALUES (%s, %s, %s, %s, %s) RETURNING id_paciente;""",
+            (paciente.documento, paciente.nombres, paciente.apellidos, paciente.email, hash_pass)
         )
         id_generado = cursor.fetchone()[0]
         conn.commit()
         cursor.close()
         conn.close()
-        return {**paciente.model_dump(), "id_paciente": id_generado}
+        
+        # Retornamos los datos base sin incluir la contraseña
+        return {
+            "id_paciente": id_generado,
+            "documento": paciente.documento,
+            "nombres": paciente.nombres,
+            "apellidos": paciente.apellidos,
+            "email": paciente.email
+        }
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=400, detail=f"No se pudo registrar: {str(e)}")
@@ -241,7 +363,6 @@ def actualizar_medico(id_medico: int, medico: MedicoCreate):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# --- CRUD DE CITAS ---
 # --- CRUD DE CITAS ---
 @app.post("/citas", response_model=CitaResponse, status_code=status.HTTP_201_CREATED, tags=["Agendamiento Citas"])
 def agendar_cita(cita: CitaCreate):
@@ -440,10 +561,10 @@ def crear_especialidad(especialidad: EspecialidadCreate):
     try:
         cursor = conn.cursor()
         cursor.execute(
-            """INSERT INTO ESPECIALIDADES (nombre_especialidad, tarifa_base) 
+            """INSERT INTO ESPECIALIDADES (nombre_specialidad, tarifa_base) 
                VALUES (%s, %s) 
                RETURNING id_especialidad;""",
-            (especialidad.nombre_especialidad, especialidad.tarifa_base)
+            (especialidad.nombre_specialidad, especialidad.tarifa_base)
         )
         id_generado = cursor.fetchone()[0]
         conn.commit()
@@ -460,18 +581,24 @@ def listar_especialidades():
     conn = get_postgres_connection()
     if not conn:
         raise HTTPException(status_code=500, detail="Error de conexión con la base de datos")
-    cursor = conn.cursor()
-    cursor.execute("SELECT id_especialidad, nombre_especialidad, tarifa_base FROM ESPECIALIDADES;")
-    filas = cursor.fetchall()
-    cursor.close()
-    conn.close()
     
-    # Convertimos la tarifa a float debido a que psycopg2 la extrae como tipo Decimal de Python
-    return [{
-        "id_especialidad": f[0],
-        "nombre_especialidad": f[1],
-        "tarifa_base": float(f[2])
-    } for f in filas]
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id_especialidad, nombre_specialidad, tarifa_base FROM ESPECIALIDADES;")
+        filas = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        # Convertimos la tarifa a float debido a que psycopg2 la extrae como tipo Decimal de Python
+        return [{
+            "id_especialidad": f[0],
+            "nombre_specialidad": f[1],
+            "tarifa_base": float(f[2])
+        } for f in filas]
+    except Exception as e:
+        if conn:
+            conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/especialidades/{id_especialidad}", response_model=EspecialidadResponse, tags=["Catálogo de Especialidades"])
 def actualizar_especialidad(id_especialidad: int, especialidad: EspecialidadCreate):
@@ -482,10 +609,10 @@ def actualizar_especialidad(id_especialidad: int, especialidad: EspecialidadCrea
         cursor = conn.cursor()
         cursor.execute(
             """UPDATE ESPECIALIDADES 
-               SET nombre_especialidad = %s, tarifa_base = %s 
+               SET nombre_specialidad = %s, tarifa_base = %s 
                WHERE id_especialidad = %s 
                RETURNING id_especialidad;""",
-            (especialidad.nombre_especialidad, especialidad.tarifa_base, id_especialidad)
+            (especialidad.nombre_specialidad, especialidad.tarifa_base, id_especialidad)
         )
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Especialidad no encontrada")
@@ -621,8 +748,9 @@ def crear_auditoria(auditoria: AuditoriaEstadoCreate):
         raise HTTPException(status_code=500, detail="Error de conexión con la base de datos")
     try:
         cursor = conn.cursor()
+        # Cambiamos AUDITORIA_ESTADO por auditoria_estados
         cursor.execute(
-            """INSERT INTO AUDITORIA_ESTADO (id_cita, estado_anterior, estado_nuevo, fecha_cambio) 
+            """INSERT INTO auditoria_estados (id_cita, estado_anterior, estado_nuevo, fecha_cambio) 
                VALUES (%s, %s, %s, COALESCE(%s, CURRENT_TIMESTAMP)) 
                RETURNING id_auditoria, fecha_cambio;""",
             (auditoria.id_cita, auditoria.estado_anterior, auditoria.estado_nuevo, auditoria.fecha_cambio)
@@ -649,7 +777,8 @@ def listar_auditorias():
     if not conn:
         raise HTTPException(status_code=500, detail="Error de conexión con la base de datos")
     cursor = conn.cursor()
-    cursor.execute("SELECT id_auditoria, id_cita, estado_anterior, estado_nuevo, fecha_cambio FROM AUDITORIA_ESTADO ORDER BY fecha_cambio DESC;")
+    # Cambiamos AUDITORIA_ESTADO por auditoria_estados
+    cursor.execute("SELECT id_auditoria, id_cita, estado_anterior, estado_nuevo, fecha_cambio FROM auditoria_estados ORDER BY fecha_cambio DESC;")
     filas = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -669,8 +798,9 @@ def actualizar_auditoria(id_auditoria: int, auditoria: AuditoriaEstadoCreate):
         raise HTTPException(status_code=500, detail="Error de conexión con la base de datos")
     try:
         cursor = conn.cursor()
+        # Cambiamos AUDITORIA_ESTADO por auditoria_estados
         cursor.execute(
-            """UPDATE AUDITORIA_ESTADO 
+            """UPDATE auditoria_estados 
                SET id_cita = %s, estado_anterior = %s, estado_nuevo = %s, fecha_cambio = COALESCE(%s, fecha_cambio) 
                WHERE id_auditoria = %s 
                RETURNING id_auditoria, fecha_cambio;""",
@@ -701,7 +831,8 @@ def eliminar_auditoria(id_auditoria: int):
         raise HTTPException(status_code=500, detail="Error de conexión con la base de datos")
     try:
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM AUDITORIA_ESTADO WHERE id_auditoria = %s RETURNING id_auditoria;", (id_auditoria,))
+        # Cambiamos AUDITORIA_ESTADO por auditoria_estados
+        cursor.execute("DELETE FROM auditoria_estados WHERE id_auditoria = %s RETURNING id_auditoria;", (id_auditoria,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Registro de auditoría no encontrado")
         conn.commit()
@@ -712,3 +843,89 @@ def eliminar_auditoria(id_auditoria: int):
         if conn:
             conn.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+from bson import ObjectId
+from pydantic import BaseModel, Field
+
+# Esquema para manejar el ID de MongoDB (ObjectId -> string)
+class PyObjectId(ObjectId):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v):
+        if not ObjectId.is_valid(v):
+            raise ValueError('Invalid objectid')
+        return ObjectId(v)
+
+class HistoriaClinicaModel(BaseModel):
+    id: Optional[str] = Field(alias="_id") # Se mapea automáticamente
+    id_paciente_sql: int
+    id_cita_sql: int
+    fecha_registro: str
+    medico_tratante: str
+    motivo_consulta: str
+    signos_vitales: dict
+    notas_evolucion: str
+    archivos_adjuntos: List[str] = []
+
+    class Config:
+        populate_by_name = True
+        json_encoders = {ObjectId: str}
+
+# ==========================================
+#          CRUD DE HISTORIAS CLÍNICAS (MONGODB)
+# ==========================================
+
+@app.post("/historias-clinicas", tags=["Historias Clínicas"])
+def crear_historia(historia: HistoriaClinicaModel):
+    db = get_mongo_db()
+    if db is None:
+        raise HTTPException(status_code=500, detail="Error al conectar con MongoDB")
+    
+    collection = db["historias_clinicas"]
+    # Convertimos el modelo a diccionario, eliminando el id temporal si viene nulo
+    data = historia.model_dump(by_alias=True, exclude={"id"})
+    
+    result = collection.insert_one(data)
+    return {"message": "Historia clínica creada", "id": str(result.inserted_id)}
+
+@app.get("/historias-clinicas/{id_paciente}", tags=["Historias Clínicas"])
+def listar_historias_paciente(id_paciente: int):
+    db = get_mongo_db()
+    collection = db["historias_clinicas"]
+    
+    # Buscamos en MongoDB filtrando por el ID que viene de PostgreSQL
+    resultados = list(collection.find({"id_paciente_sql": id_paciente}))
+    
+    # Convertimos los ObjectIds de Mongo a string para que el JSON sea válido
+    for doc in resultados:
+        doc["_id"] = str(doc["_id"])
+        
+    return resultados
+
+@app.post("/finalizar-cita-y-crear-historia/{id_cita}", tags=["Integración Políglota"])
+def finalizar_cita(id_cita: int):
+    # 1. Lógica PostgreSQL: Verificar y actualizar estado
+    conn = get_postgres_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id_paciente, id_medico FROM CITAS WHERE id_cita = %s", (id_cita,))
+    cita = cursor.fetchone()
+    
+    if not cita:
+        raise HTTPException(status_code=404, detail="Cita no encontrada en SQL")
+        
+    # 2. Lógica MongoDB: Crear documento inicial
+    db = get_mongo_db()
+    db["historias_clinicas"].insert_one({
+        "id_cita_sql": id_cita,
+        "id_paciente_sql": cita[0],
+        "fecha_registro": datetime.utcnow().isoformat(),
+        "medico_tratante": f"ID Médico: {cita[1]}",
+        "motivo_consulta": "Consulta Médica",
+        "signos_vitales": {"presion": "120/80", "ritmo_cardiaco": 70},
+        "notas_evolucion": "Pendiente de diligenciar",
+        "archivos_adjuntos": []
+    })
+    
+    return {"status": "Cita finalizada en SQL y expediente clínico creado en No-SQL"}
