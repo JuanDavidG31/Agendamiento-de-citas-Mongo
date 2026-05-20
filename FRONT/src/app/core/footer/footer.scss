@@ -1,0 +1,78 @@
+$color-text-muted: #64748b;
+$color-bg-footer: #ffffff;
+$border-color: #e2e8f0;
+
+.clinic-footer {
+  background-color: $color-bg-footer;
+  border-top: 1px solid $border-color;
+  color: $color-text-muted;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 0.85rem;
+  padding: 1rem 2rem;
+  margin-top: auto; // Si usas Flexbox en el layout general, esto empuja el footer abajo
+
+  .footer-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  // Enlaces del Centro
+  .footer-links {
+    display: flex;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 1.5rem;
+
+    li {
+      a {
+        color: $color-text-muted;
+        text-decoration: none;
+        transition: color 0.2s ease;
+
+        &:hover {
+          color: #0284c7; // Color primary
+        }
+      }
+    }
+  }
+
+  // Indicadores de la Derecha
+  .footer-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+
+    .system-version {
+      font-family: monospace;
+      background-color: #f1f5f9;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      color: #475569;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+
+      &::before {
+        content: '';
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        background-color: #22c55e; // Verde indicador "online"
+        border-radius: 50%;
+      }
+    }
+  }
+}

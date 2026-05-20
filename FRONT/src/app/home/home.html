@@ -1,0 +1,39 @@
+<div class="home-container">
+  <header class="home-header">
+    <h1>Sistema de Gestión Médica</h1>
+    <p class="subtitle">Panel de Control General</p>
+  </header>
+
+  <section class="stats-grid">
+    <div class="stat-card">
+      <h3>{{ estadisticas.citasHoy }}</h3>
+      <p>Citas Programadas Hoy</p>
+    </div>
+    <div class="stat-card">
+      <h3>{{ estadisticas.pacientesActivos }}</h3>
+      <p>Pacientes en el Sistema</p>
+    </div>
+    <div class="stat-card">
+      <h3>{{ estadisticas.historiasClinicas }}</h3>
+      <p>Historias Clínicas Creadas</p>
+    </div>
+  </section>
+
+  <section class="modules-grid">
+    <div class="module-card relational">
+      <div class="module-icon">📊</div>
+      <h2>Módulo de Agendamiento</h2>
+      <p>Control e inserción de registros en el núcleo relacional. Protegido bajo restricciones de consistencia ACID
+        para evitar sobreposiciones de horarios.</p>
+      <button routerLink="/agendar" class="btn-module">Ir a Agendamiento</button>
+    </div>
+
+    <div class="module-card document">
+      <div class="module-icon">📂</div>
+      <h2>Historias Clínicas</h2>
+      <p>Visualización y auditoría de esquemas de documentos flexibles. Diseñado para la lectura ágil de notas de
+        evolución y signos vitales mediante persistencia BASE.</p>
+      <button routerLink="/historias" class="btn-module">Ir a Historias Clínicas</button>
+    </div>
+  </section>
+</div>
