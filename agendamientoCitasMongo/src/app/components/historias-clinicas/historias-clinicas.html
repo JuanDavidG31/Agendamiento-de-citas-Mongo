@@ -1,0 +1,136 @@
+<div class="portal-clinico animate-fade-in">
+
+    <section class="search-bar-section">
+        <div class="search-container">
+            <span class="search-icon">🔍</span>
+            <input type="number" [(ngModel)]="filtroPacienteId" (input)="ejecutarConsulta()"
+                placeholder="Ingrese el número de documento o ID del paciente para consultar..."
+                class="main-search-input" />
+            <select [(ngModel)]="consultaSeleccionada" (change)="ejecutarConsulta()" class="filter-dropdown">
+                <option value="todos">📋 Mostrar Todos los Expedientes</option>
+                <option value="filtro_paciente">🆔 Filtrar por Documento Único</option>
+                <option value="signos_criticos">⚠️ Alertas de Frecuencia Cardíaca (>90 lpm)</option>
+            </select>
+        </div>
+    </section>
+
+    <div *ngIf="historiasFiltradas.length === 0" class="welcome-clinical-card">
+        <div class="welcome-icon">🏥</div>
+        <h3>Visor de Expedientes Médicos Unificado</h3>
+        <p>Por favor, ingrese un criterio de búsqueda o cambie el filtro superior para recuperar la información del
+            agendamiento y la evolución clínica del paciente.</p>
+    </div>
+
+    <div *ngIf="historiasFiltradas.length > 0" class="dashboard-grid">
+
+        <aside class="patient-sidebar animate-slide-in">
+            <div class="sidebar-profile-header">
+                <div class="avatar-circle">👤</div>
+                <div class="profile-title">
+                    <h4>Expediente General</h4>
+                    <span class="status-pill active">Paciente Activo</span>
+                </div>
+            </div>
+
+            <div class="sidebar-info-list">
+                <div class="info-item-row">
+                    <span class="info-label">ID Sistema:</span>
+                    <span class="info-value">#{{ historiasFiltradas[0].id_paciente_sql }}</span>
+                </div>
+                <div class="info-item-row">
+                    <span class="info-label">Contacto Emergencia:</span>
+                    <span class="info-value">Carlos Gómez (Padre)</span>
+                </div>
+                <div class="info-item-row">
+                    <span class="info-label">Teléfono:</span>
+                    <span class="info-value">3004005060</span>
+                </div>
+                <div class="info-item-row alert-row">
+                    <span class="info-label">Alergias Detectadas:</span>
+                    <span class="info-value">Penicilina, Aspirina</span>
+                </div>
+            </div>
+
+            <div class="sidebar-footer-note">
+                <p>ℹ️ Datos demográficos e integridad de identidad validados mediante el núcleo relacional del sistema.
+                </p>
+            </div>
+        </aside>
+
+        <main class="timeline-column">
+            <div class="column-header">
+                <h3>Evolución y Registro de Consultas Asociadas</h3>
+                <span class="counter-badge">{{ historiasFiltradas.length }} Registros encontrados</span>
+            </div>
+
+            <div class="clinical-timeline">
+                <div class="timeline-card" *ngFor="let doc of historiasFiltradas">
+
+                    <div class="timeline-badge-connector"></div>
+
+                    <div class="card-clinical-header">
+                        <div class="doctor-info">
+                            <span class="doc-avatar">👨‍⚕️</span>
+                            <div>
+                                <h5>{{ doc.medico_tratante || 'Médico de Turno' }}</h5>
+                                <span class="appointment-date">{{ doc.fecha_registro | date:'longDate' }} — {{
+                                    doc.fecha_registro | date:'shortTime' }}</span>
+                            </div>
+                        </div>
+                        <div class="appointment-tags">
+                            <span class="tag-id-sql">Cita Nº {{ doc.id_cita_sql || 'N/A' }}</span>
+                        </div>
+                    </div>
+
+                    <div class="card-clinical-body">
+                        <div class="clinical-data-group">
+                            <label>Motivo del Agendamiento</label>
+                            <p class="motivo-text">{{ doc.motivo_consulta }}</p>
+                        </div>
+
+                        <div class="vitals-panel-real" *ngIf="doc.signos_vitales">
+                            <div class="vital-tile">
+                                <span class="vital-icon-real">🫁</span>
+                                <div class="vital-desc">
+                                    <span class="v-label">Presión Arterial</span>
+                                    <span class="v-value">{{ doc.signos_vitales.presion }} <small>mmHg</small></span>
+                                </div>
+                            </div>
+                            <div class="vital-tile" [class.danger-vital]="doc.signos_vitales.ritmo_cardiaco > 90">
+                                <span class="vital-icon-real pulsate">❤️</span>
+                                <div class="vital-desc">
+                                    <span class="v-label">Frecuencia Cardíaca</span>
+                                    <span class="v-value">{{ doc.signos_vitales.ritmo_cardiaco }}
+                                        <small>lpm</small></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="clinical-data-group" *ngIf="doc.notas_evolucion">
+                            <label>Notas de Evolución Médica</label>
+                            <p class="evolucion-text">{{ doc.notas_evolucion }}</p>
+                        </div>
+
+                        <div class="diagnosis-box-real" *ngIf="doc.diagnostico_codigo">
+                            <span class="diag-icon">📋</span>
+                            <p><strong>Diagnóstico Principal Codificado (CIE-10):</strong> <u>{{ doc.diagnostico_codigo
+                                    }}</u></p>
+                        </div>
+
+                        <div class="attachments-container-real"
+                            *ngIf="doc.archivos_adjuntos && doc.archivos_adjuntos[0] !== 'Ninguno'">
+                            <label>Documentos Adjuntos al Expediente</label>
+                            <div class="attachment-files-list">
+                                <a class="file-download-link" *ngFor="let file of doc.archivos_adjuntos">
+                                    <span class="clip-icon">📎</span> {{ file }}
+                                </a>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </main>
+
+    </div>
+</div>
