@@ -1,0 +1,57 @@
+<div class="agendamiento-container">
+    <header class="header-acid">
+        <h2>Agendamiento de Citas</h2>
+        <span class="badge">PostgreSQL (Núcleo ACID)</span>
+    </header>
+
+    <p class="description">
+        Este módulo garantiza la Atomicidad y Consistencia. Al agendar, el consultorio y el médico quedarán bloqueados
+        para evitar sobreposiciones.
+    </p>
+
+    <form [formGroup]="citaForm" (ngSubmit)="agendarCita()" class="form-grid">
+
+        <div class="form-group">
+            <label for="paciente">Paciente (ID_Paciente FK):</label>
+            <select id="paciente" formControlName="id_paciente">
+                <option value="">-- Seleccione un Paciente --</option>
+                <option *ngFor="let pac of pacientes" [value]="pac.id">
+                    {{ pac.documento }} - {{ pac.nombre }}
+                </option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="medico">Médico Tratante (ID_Medico FK):</label>
+            <select id="medico" formControlName="id_medico">
+                <option value="">-- Seleccione un Médico --</option>
+                <option *ngFor="let med of medicos" [value]="med.id">
+                    {{ med.nombre }} ({{ med.especialidad }})
+                </option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="fecha">Fecha y Hora:</label>
+            <input type="datetime-local" id="fecha" formControlName="fecha_hora">
+        </div>
+
+        <div class="form-group">
+            <label for="consultorio">Consultorio:</label>
+            <input type="text" id="consultorio" formControlName="consultorio" readonly>
+        </div>
+
+        <button type="submit" class="btn-submit" [disabled]="!citaForm.valid">
+            Confirmar y Bloquear Cita
+        </button>
+
+    </form>
+
+    <div *ngIf="mensajeExito" class="alert alert-success">
+        {{ mensajeExito }}
+    </div>
+
+    <div *ngIf="mensajeError" class="alert alert-error">
+        {{ mensajeError }}
+    </div>
+</div>

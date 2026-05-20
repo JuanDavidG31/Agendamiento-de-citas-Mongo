@@ -1,0 +1,122 @@
+.home-container {
+  max-width: 1000px;
+  margin: 2rem auto;
+  padding: 0 1.5rem;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.home-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.home-header h1 {
+  color: #0f172a;
+  font-size: 2.5rem;
+  margin: 0 0 0.5rem 0;
+}
+
+.subtitle {
+  color: #64748b;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+/* Rejilla de Indicadores */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.stat-card {
+  background: #ffffff;
+  padding: 1.5rem;
+  border-radius: 8px;
+  text-align: center;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border-top: 4px solid #2563eb;
+}
+
+.stat-card h3 {
+  font-size: 2.25rem;
+  margin: 0 0 0.5rem 0;
+  color: #1e293b;
+}
+
+.stat-card p {
+  margin: 0;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* Rejilla de Accesos Directos */
+.modules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 2rem;
+}
+
+@media (max-width: 850px) {
+  .modules-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.module-card {
+  background: #ffffff;
+  padding: 2.5rem;
+  border-radius: 12px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e2e8f0;
+}
+
+.module-icon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.module-card h2 {
+  margin: 0 0 1rem 0;
+  color: #1e293b;
+}
+
+.module-card p {
+  color: #475569;
+  line-height: 1.6;
+  margin: 0 0 2rem 0;
+  flex-grow: 1;
+}
+
+.btn-module {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.relational .btn-module {
+  background-color: #2563eb;
+  color: #ffffff;
+}
+
+.relational .btn-module:hover {
+  background-color: #1d4ed8;
+}
+
+/* ESTILO ACTUALIZADO: Botón de MongoDB Activo */
+.document .btn-module {
+  background-color: #10b981;
+  color: #ffffff;
+}
+
+.document .btn-module:hover {
+  background-color: #059669;
+}
