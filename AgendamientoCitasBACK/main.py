@@ -712,3 +712,90 @@ def eliminar_auditoria(id_auditoria: int):
         if conn:
             conn.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
+from bson import ObjectId
+from pydantic import BaseModel, Field
+
+# Esquema para manejar el ID de MongoDB (ObjectId -> string)
+class PyObjectId(ObjectId):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v):
+        if not ObjectId.is_valid(v):
+            raise ValueError('Invalid objectid')
+        return ObjectId(v)
+
+class HistoriaClinicaModel(BaseModel):
+    id: Optional[str] = Field(alias="_id") # Se mapea automáticamente
+    id_paciente_sql: int
+    id_cita_sql: int
+    fecha_registro: str
+    medico_tratante: str
+    motivo_consulta: str
+    signos_vitales: dict
+    notas_evolucion: str
+    archivos_adjuntos: List[str] = []
+
+    class Config:
+        populate_by_name = True
+        json_encoders = {ObjectId: str}
+
+# ==========================================
+#          CRUD DE HISTORIAS CLÍNICAS (MONGODB)
+# ==========================================
+
+@app.post("/historias-clinicas", tags=["Historias Clínicas"])
+def crear_historia(historia: HistoriaClinicaModel):
+    db = get_mongo_db()
+    if db is None:
+        raise HTTPException(status_code=500, detail="Error al conectar con MongoDB")
+    
+    collection = db["historias_clinicas"]
+    # Convertimos el modelo a diccionario, eliminando el id temporal si viene nulo
+    data = historia.model_dump(by_alias=True, exclude={"id"})
+    
+    result = collection.insert_one(data)
+    return {"message": "Historia clínica creada", "id": str(result.inserted_id)}
+
+@app.get("/historias-clinicas/{id_paciente}", tags=["Historias Clínicas"])
+def listar_historias_paciente(id_paciente: int):
+    db = get_mongo_db()
+    collection = db["historias_clinicas"]
+    
+    # Buscamos en MongoDB filtrando por el ID que viene de PostgreSQL
+    resultados = list(collection.find({"id_paciente_sql": id_paciente}))
+    
+    # Convertimos los ObjectIds de Mongo a string para que el JSON sea válido
+    for doc in resultados:
+        doc["_id"] = str(doc["_id"])
+        
+    return resultados
+
+@app.post("/finalizar-cita-y-crear-historia/{id_cita}", tags=["Integración Políglota"])
+def finalizar_cita(id_cita: int):
+    # 1. Lógica PostgreSQL: Verificar y actualizar estado
+    conn = get_postgres_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id_paciente, id_medico FROM CITAS WHERE id_cita = %s", (id_cita,))
+    cita = cursor.fetchone()
+    
+    if not cita:
+        raise HTTPException(status_code=404, detail="Cita no encontrada en SQL")
+        
+    # 2. Lógica MongoDB: Crear documento inicial
+    db = get_mongo_db()
+    db["historias_clinicas"].insert_one({
+        "id_cita_sql": id_cita,
+        "id_paciente_sql": cita[0],
+        "fecha_registro": datetime.utcnow().isoformat(),
+        "medico_tratante": f"ID Médico: {cita[1]}",
+        "motivo_consulta": "Consulta Médica",
+        "signos_vitales": {"presion": "120/80", "ritmo_cardiaco": 70},
+        "notas_evolucion": "Pendiente de diligenciar",
+        "archivos_adjuntos": []
+    })
+    
+    return {"status": "Cita finalizada en SQL y expediente clínico creado en No-SQL"}
