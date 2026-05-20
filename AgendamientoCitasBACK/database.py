@@ -25,12 +25,10 @@ def get_postgres_connection():
         return None
 
 def get_mongo_db():
-    """
-    Establece y retorna el acceso a la base de datos documental de MongoDB.
-    """
     try:
         client = MongoClient(os.getenv("MONGO_DATABASE_URL"))
-        db = client["hospital_db"]
+        # Asegúrate de que el nombre coincida exactamente con Atlas
+        db = client["hospital_polyglot_db"] 
         return db
     except Exception as e:
         print(f"❌ Error crítico al conectar con MongoDB: {e}")

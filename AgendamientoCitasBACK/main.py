@@ -4,11 +4,11 @@ from datetime import datetime
 from typing import Optional, List
 
 # Importamos tu conexión a Neon desde database.py
-from database import get_postgres_connection
-
+from database import get_postgres_connection, get_mongo_db
 from passlib.context import CryptContext
 import jwt
 import os
+
 
 # ==========================================
 # CONFIGURACIÓN DE SEGURIDAD (JWT y Bcrypt)
@@ -999,16 +999,21 @@ class PyObjectId(ObjectId):
             raise ValueError('Invalid objectid')
         return ObjectId(v)
 
+from typing import Optional, List, Dict, Any
+
 class HistoriaClinicaModel(BaseModel):
-    id: Optional[str] = Field(alias="_id") # Se mapea automáticamente
+    id: Optional[str] = Field(alias="_id", default=None)
     id_paciente_sql: int
     id_cita_sql: int
     fecha_registro: str
     medico_tratante: str
+    signos_vitales: Dict[str, Any]
     motivo_consulta: str
-    signos_vitales: dict
-    notas_evolucion: str
+    diagnostico: str
+    receta_medica: List[str] = []
     archivos_adjuntos: List[str] = []
+    # Usamos Optional porque algunos pacientes pueden no requerir incapacidad
+    incapacidad_dias: Optional[int] = None 
 
     class Config:
         populate_by_name = True
