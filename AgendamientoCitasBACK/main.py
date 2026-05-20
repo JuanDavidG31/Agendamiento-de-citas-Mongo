@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional, List
-
+from fastapi.middleware.cors import CORSMiddleware
 # Importamos tu conexión a Neon desde database.py
 from database import get_postgres_connection, get_mongo_db
 from passlib.context import CryptContext
@@ -133,7 +133,13 @@ app = FastAPI(
     description="API de Integración Políglota. Control de operaciones CRUD en el núcleo transaccional (PostgreSQL).",
     version="2.0"
 )
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # El asterisco permite solicitudes desde CUALQUIER origen
+    allow_credentials=True,
+    allow_methods=["*"],  # Permite todos los métodos (GET, POST, PUT, DELETE)
+    allow_headers=["*"],  # Permite todos los encabezados (incluyendo Authorization para tu JWT)
+)
 # ==========================================
 #          SISTEMA DE AUTENTICACIÓN
 # ==========================================
