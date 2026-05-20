@@ -20,10 +20,12 @@ ALGORITHM = "HS256"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def get_password_hash(password: str):
-    return pwd_context.hash(password)
+    # Truncamos a 72 caracteres para evitar el error de límite de bcrypt
+    return pwd_context.hash(password[:72])
 
 def verify_password(plain_password: str, hashed_password: str):
-    return pwd_context.verify(plain_password, hashed_password)
+    # Truncamos también al verificar para que coincida exactamente
+    return pwd_context.verify(plain_password[:72], hashed_password)
 
 # ==========================================
 # 1. ESQUEMAS DE VALIDACIÓN (PYDANTIC)
