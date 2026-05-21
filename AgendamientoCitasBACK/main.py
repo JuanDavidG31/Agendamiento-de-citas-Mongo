@@ -180,6 +180,7 @@ def iniciar_sesion(credenciales: LoginRequest):
                 "access_token": token, 
                 "token_type": "bearer", 
                 "rol": "paciente", 
+                "id": paciente[0],  # <--- ID extraído de la base de datos añadido aquí
                 "mensaje": f"Bienvenido, paciente {paciente[2]}"
             }
         
@@ -209,7 +210,8 @@ def iniciar_sesion(credenciales: LoginRequest):
             return {
                 "access_token": token, 
                 "token_type": "bearer", 
-                "rol": "medico", 
+                "rol": "medico",
+                "id": medico[0],  # <--- ID extraído de la base de datos añadido aquí
                 "mensaje": f"Bienvenido, Dr/Dra. {medico[2]}"
             }
             
@@ -231,17 +233,18 @@ def home():
 # ==========================================
 
 # --- CRUD DE PACIENTES ---
-@app.get("/pacientes/{id_paciente}", response_model=PacienteResponse, tags=["Pacientes"])
-def obtener_paciente(id_paciente: int):
+@app.get("/pacientes/{documento}", response_model=PacienteResponse, tags=["Pacientes"])
+def obtener_paciente(documento: str):
     conn = get_postgres_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id_paciente, documento, nombres, apellidos, email FROM PACIENTES WHERE id_paciente = %s;", (id_paciente,))
+    # Cambiamos el WHERE para buscar por la columna documento
+    cursor.execute("SELECT id_paciente, documento, nombres, apellidos, email FROM PACIENTES WHERE documento = %s;", (documento,))
     fila = cursor.fetchone()
     cursor.close()
     conn.close()
     
     if not fila:
-        raise HTTPException(status_code=404, detail="Paciente no encontrado")
+        raise HTTPException(status_code=404, detail="Paciente no encontrado con ese documento")
         
     return {
         "id_paciente": fila[0], 
@@ -331,17 +334,18 @@ def eliminar_paciente(id_paciente: int):
 
 
 # --- CRUD DE MÉDICOS ---
-@app.get("/medicos/{id_medico}", response_model=MedicoResponse, tags=["Médicos"])
-def obtener_medico(id_medico: int):
+@app.get("/medicos/{documento}", response_model=MedicoResponse, tags=["Médicos"])
+def obtener_medico(documento: str):
     conn = get_postgres_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id_medico, documento, nombre_completo, id_especialidad FROM MEDICOS WHERE id_medico = %s;", (id_medico,))
+    # Cambiamos el WHERE para buscar por la columna documento
+    cursor.execute("SELECT id_medico, documento, nombre_completo, id_especialidad FROM MEDICOS WHERE documento = %s;", (documento,))
     fila = cursor.fetchone()
     cursor.close()
     conn.close()
     
     if not fila:
-        raise HTTPException(status_code=404, detail="Médico no encontrado")
+        raise HTTPException(status_code=404, detail="Médico no encontrado con ese documento")
         
     return {
         "id_medico": fila[0], 
